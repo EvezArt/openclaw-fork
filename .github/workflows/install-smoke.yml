@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   install-smoke:
-    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout CLI
         uses: actions/checkout@v4
