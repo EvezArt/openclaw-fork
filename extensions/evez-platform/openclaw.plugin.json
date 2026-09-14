@@ -2,6 +2,7 @@
   "id": "evez-platform",
   "name": "EVEZ Platform",
   "description": "Bounded research orchestration and tamper-evident journey memory for EVEZ-OS agents.",
+  "skills": ["./skills"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

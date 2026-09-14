@@ -5,6 +5,7 @@ import { createEvezModelLabTool } from "./src/evez-model-lab.js";
 import { createEvezContextBrokerTool } from "./src/evez-context-broker.js";
 import { createEvezMediaSpineTool } from "./src/evez-media-spine.js";
 import { createEvezWorkbenchTool } from "./src/evez-workbench.js";
+import { createEvezActuateTool } from "./src/evez-actuate.js";
 
 export default function register(api: OpenClawPluginApi) {
   api.registerTool(createEvezResearchTool(api), { optional: true });
@@ -13,4 +14,5 @@ export default function register(api: OpenClawPluginApi) {
   api.registerTool(createEvezContextBrokerTool(api), { optional: true });
   api.registerTool(createEvezMediaSpineTool(api), { optional: true });
   api.registerTool(createEvezWorkbenchTool(api), { optional: true });
+  api.registerTool(createEvezActuateTool(api), { optional: true });
 }
