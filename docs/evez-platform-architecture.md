@@ -36,6 +36,7 @@ Gateway and identity boundary
 | Task admission | Classify impact, data sensitivity, deadline, and required tools | Task envelope | Refuse tasks outside policy |
 | Research planner | Create independent lanes and synthesis gates | Research plan | Return a plan without claiming findings |
 | Model router | Select models by context, cost, modality, and risk | Routing decision | Fail over to an approved model or abstain |
+| Model lab | Normalize public model metadata and run capability probes | Model profile and benchmark result | Mark unverified claims and license gaps; never inspect private weights |
 | Evidence ledger | Store source references, excerpts, timestamps, claims, and contradictions | Immutable evidence records | Mark missing or stale evidence explicitly |
 | Mildred | Assess claim support and calibration | Assessment bundle hash | Abstain below threshold or on unresolved contradiction |
 | Steward | Convert approved intent into reversible actions | Dry run, preconditions, rollback record | Stop before consequential action |
@@ -132,7 +133,7 @@ This is genuine self-development through observable artifacts. It is stronger th
 
 ## Production deployment
 
-The first implementation fits as an OpenClaw extension and local append-only ledger. A production deployment should split the services only when scale or reliability requires it. A minimal provider-grade deployment uses a managed relational database for task and evidence metadata, object storage for source snapshots, a queue for lane execution, a secrets manager, an evaluation runner, and an operator console.
+The first implementation fits as an OpenClaw extension and local append-only ledger. A production deployment should split the services only when scale or reliability requires it. A minimal provider-grade deployment uses a managed relational database for task and evidence metadata, object storage for source snapshots, a queue for lane execution, a secrets manager, an evaluation runner, a model interoperability registry, and an operator console.
 
 WebDev is suitable for a managed dashboard, API, cron jobs, and a low-volume worker. A persistent cloud computer or third-party VM becomes justified when EVEZ requires Docker, custom runtimes, OS-level firewall control, fixed IP webhooks, a large queue, or more than the managed 1 vCPU / 512 MB envelope. The Contabo VPS is a candidate target only after administrative access, backups, SSH keys, and gateway hardening are restored.
 
@@ -153,4 +154,4 @@ No agent or model should be introduced to broad users until it clears all gates 
 
 ## Current build slice
 
-The repository now contains two complementary extensions. Mildred performs claim-level evidence verification. EVEZ Platform creates independent research plans and maintains the hash-chained Journey Ledger. Together they establish the trust substrate for the future agent collective.
+The repository now contains two complementary extensions. Mildred performs claim-level evidence verification. EVEZ Platform creates independent research plans, maintains the hash-chained Journey Ledger, and normalizes public model metadata into capability probes. Together they establish the trust substrate and interoperability layer for the future agent collective.
