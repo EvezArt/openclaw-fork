@@ -1,0 +1,12 @@
+{
+  "name": "@openclaw/evez-platform",
+  "version": "0.1.0",
+  "description": "EVEZ-OS platform kernel for bounded research and journey memory",
+  "type": "module",
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  }
+}

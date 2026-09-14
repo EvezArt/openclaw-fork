@@ -384,6 +384,18 @@ importers:
         specifier: workspace:*
         version: link:../..
 
+  extensions/mildred:
+    devDependencies:
+      openclaw:
+        specifier: workspace:*
+        version: link:../..
+
+  extensions/evez-platform:
+    devDependencies:
+      openclaw:
+        specifier: workspace:*
+        version: link:../..
+
   extensions/minimax-portal-auth:
     devDependencies:
       openclaw:
