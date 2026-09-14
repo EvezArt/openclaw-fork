@@ -1,0 +1,12 @@
+{
+  "name": "@openclaw/mildred",
+  "version": "0.1.0",
+  "description": "Evidence-first verification tool for OpenClaw",
+  "type": "module",
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  }
+}
