@@ -1,0 +1,23 @@
+{
+  "id": "mildred",
+  "name": "Mildred Verification",
+  "description": "Evidence-first claim verification with provenance, contradiction detection, hashing, and fail-closed abstention.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "defaultAbstentionThreshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.7
+      }
+    }
+  },
+  "uiHints": {
+    "defaultAbstentionThreshold": {
+      "label": "Default abstention threshold",
+      "help": "Mildred abstains below this confidence instead of guessing."
+    }
+  }
+}
