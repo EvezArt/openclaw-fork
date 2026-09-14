@@ -1,23 +1,38 @@
 #!/usr/bin/env bash
-# EVEZ-OS Universal Node Fix Script
-set -euo pipefail
-echo "=== EVEZ-OS Node Fix ==="
-echo "Approving pending device pairings..."
-openclaw devices approve --latest 2>/dev/null || true
-openclaw devices approve --all 2>/dev/null || true
-echo "Disabling device pairing..."
-openclaw config set gateway.auth.mode none 2>/dev/null || true
-echo "Restarting gateway..."
-if command -v openclaw &>/dev/null; then
-  openclaw gateway restart --auth none --allow-unconfigured 2>/dev/null || true
-fi
-if command -v docker &>/dev/null; then
-  docker restart openclaw-gateway 2>/dev/null || true
-fi
-sleep 5
-if curl -s http://127.0.0.1:18789/healthz | grep -q "\"ok\""; then
-  echo "Gateway is live with auth=none"
+# OpenClaw node diagnostic — deliberately read-only and fail-closed.
+set -Eeuo pipefail
+
+GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
+HEALTH_URL="http://127.0.0.1:${GATEWAY_PORT}/healthz"
+
+printf '%s\n' '=== OpenClaw Node Diagnostic ==='
+printf 'Gateway health endpoint: %s\n' "$HEALTH_URL"
+
+if command -v openclaw >/dev/null 2>&1; then
+  printf '%s\n' 'OpenClaw CLI detected.'
+  openclaw gateway status 2>&1 || true
 else
-  echo "Gateway not responding"
+  printf '%s\n' 'OpenClaw CLI is not installed or is not on PATH.'
 fi
-echo "Fix complete. EVEZ Superagent can now connect."
+
+if command -v docker >/dev/null 2>&1; then
+  printf '%s\n' 'Matching containers:'
+  docker ps --filter 'name=openclaw' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>&1 || true
+fi
+
+if curl --silent --show-error --fail --max-time 5 "$HEALTH_URL"; then
+  printf '\n%s\n' 'Gateway health endpoint responded.'
+else
+  printf '\n%s\n' 'Gateway health endpoint did not respond.'
+fi
+
+cat <<'EOF'
+
+Security posture:
+- This script never approves device pairings.
+- This script never changes gateway authentication.
+- This script never restarts services or containers.
+
+If gateway access is unavailable, restore it through an authenticated local console
+or an SSH session, then validate the configured authentication and network binding.
+EOF
