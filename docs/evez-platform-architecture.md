@@ -37,6 +37,7 @@ Gateway and identity boundary
 | Research planner | Create independent lanes and synthesis gates | Research plan | Return a plan without claiming findings |
 | Model router | Select models by context, cost, modality, and risk | Routing decision | Fail over to an approved model or abstain |
 | Model lab | Normalize public model metadata and run capability probes | Model profile and benchmark result | Mark unverified claims and license gaps; never inspect private weights |
+| Context broker | Index corpora larger than a model's native window and assemble cited evidence windows | Chunk index, retrieval scores, context manifests | Retrieve less, cite sources, and abstain rather than overflow or invent |
 | Evidence ledger | Store source references, excerpts, timestamps, claims, and contradictions | Immutable evidence records | Mark missing or stale evidence explicitly |
 | Mildred | Assess claim support and calibration | Assessment bundle hash | Abstain below threshold or on unresolved contradiction |
 | Steward | Convert approved intent into reversible actions | Dry run, preconditions, rollback record | Stop before consequential action |
@@ -133,7 +134,9 @@ This is genuine self-development through observable artifacts. It is stronger th
 
 ## Production deployment
 
-The first implementation fits as an OpenClaw extension and local append-only ledger. A production deployment should split the services only when scale or reliability requires it. A minimal provider-grade deployment uses a managed relational database for task and evidence metadata, object storage for source snapshots, a queue for lane execution, a secrets manager, an evaluation runner, a model interoperability registry, and an operator console.
+The first implementation fits as an OpenClaw extension and local append-only ledger. A production deployment should split the services only when scale or reliability requires it. A minimal provider-grade deployment uses a managed relational database for task and evidence metadata, object storage for source snapshots, a queue for lane execution, a secrets manager, an evaluation runner, a model interoperability registry, a hierarchical context index, and an operator console.
+
+The context broker is the practical route to a 2M-token experience on free or small models. It does not falsely claim that the downstream model has two million tokens of dense attention. It indexes a much larger corpus, ranks relevant chunks, fits them into a controlled per-call budget, preserves source citations, and exposes the virtual capacity separately from the model's native context. A stronger production implementation can replace the lexical scorer with embeddings or a reranker without changing the tool contract.
 
 WebDev is suitable for a managed dashboard, API, cron jobs, and a low-volume worker. A persistent cloud computer or third-party VM becomes justified when EVEZ requires Docker, custom runtimes, OS-level firewall control, fixed IP webhooks, a large queue, or more than the managed 1 vCPU / 512 MB envelope. The Contabo VPS is a candidate target only after administrative access, backups, SSH keys, and gateway hardening are restored.
 
@@ -154,4 +157,17 @@ No agent or model should be introduced to broad users until it clears all gates 
 
 ## Current build slice
 
-The repository now contains two complementary extensions. Mildred performs claim-level evidence verification. EVEZ Platform creates independent research plans, maintains the hash-chained Journey Ledger, and normalizes public model metadata into capability probes. Together they establish the trust substrate and interoperability layer for the future agent collective.
+The repository now contains two complementary extensions. Mildred performs claim-level evidence verification. EVEZ Platform creates independent research plans, maintains the hash-chained Journey Ledger, normalizes public model metadata into capability probes, and provides a virtual 2M-token context broker. Together they establish the trust substrate and interoperability layer for the future agent collective.
+
+## Free OpenClaw setup
+
+Install the extension from the review branch or after it lands in the repository, then register the extension in the OpenClaw workspace. In an OpenClaw checkout, the development path is:
+
+```bash
+pnpm install
+pnpm openclaw plugins install ./extensions/evez-platform
+```
+
+Use `evez-context-broker` with `action: "ingest"` to index local documents, `action: "search"` to retrieve a ranked evidence window, and `action: "assemble"` to produce a citation-preserving model-ready context. The broker stores its index under `.evez/context-index.json` in the workspace. The default virtual capacity is 2,000,000 estimated tokens, while each individual model call remains bounded by that model's actual context window and the requested `maxTokens`.
+
+The free path is therefore model-agnostic. It can sit in front of a local Ollama or LM Studio model, a free inference endpoint, or an approved hosted provider. The model cost, speed, and native context remain properties of the selected worker; the EVEZ layer supplies retrieval, provenance, and automatic budget control.
