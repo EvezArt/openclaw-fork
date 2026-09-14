@@ -7,6 +7,7 @@ import { createEvezMediaSpineTool } from "./src/evez-media-spine.js";
 import { createEvezWorkbenchTool } from "./src/evez-workbench.js";
 import { createEvezActuateTool } from "./src/evez-actuate.js";
 import { createEvezProductionLoopTool } from "./src/evez-production-loop.js";
+import { createEvezSelfJournalTool } from "./src/evez-self-journal.js";
 
 export default function register(api: OpenClawPluginApi) {
   api.registerTool(createEvezResearchTool(api), { optional: true });
@@ -17,4 +18,5 @@ export default function register(api: OpenClawPluginApi) {
   api.registerTool(createEvezWorkbenchTool(api), { optional: true });
   api.registerTool(createEvezActuateTool(api), { optional: true });
   api.registerTool(createEvezProductionLoopTool(api), { optional: true });
+  api.registerTool(createEvezSelfJournalTool(api), { optional: true });
 }
