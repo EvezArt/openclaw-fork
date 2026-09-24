@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EVEZ Local Self-Play Receipt",
+  "type": "object",
+  "required": ["execution_scope","credentials","live_endpoint_contact","cycles","event_count","evidence_status"],
+  "properties": {
+    "execution_scope": {"type":"string","enum":["LOCAL","REMOTE","MIXED","UNKNOWN"]},
+    "credentials": {"type":"string","enum":["NONE","PRESENT","UNKNOWN"]},
+    "live_endpoint_contact": {"type":"string","enum":["TRUE","FALSE","UNKNOWN"]},
+    "cycles": {"type":"integer","minimum":0},
+    "event_count": {"type":"integer","minimum":0},
+    "final_stage": {"type":"string"},
+    "final_score": {"type":["number","null"]},
+    "evidence_status": {"type":"string","enum":["OPERATOR_REPORTED","REPRODUCED","INDEPENDENTLY_VERIFIED","UNKNOWN"]}
+  },
+  "additionalProperties": true
+}

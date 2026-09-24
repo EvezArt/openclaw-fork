@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "orchestrator": "SPINE",
+  "agents": [
+    {"id": "SPINE", "role": "coordination", "required": true},
+    {"id": "TRUNK", "role": "data_pipeline", "required": true},
+    {"id": "DEPLOY", "role": "deployment", "required": false},
+    {"id": "VAULT", "role": "security", "required": true},
+    {"id": "HARVEST", "role": "research_collection", "required": true},
+    {"id": "SCOUT", "role": "intelligence", "required": true},
+    {"id": "WITNESS", "role": "audit_verification", "required": true},
+    {"id": "CAIN", "role": "contradiction_detection", "required": true}
+  ],
+  "verification_policy": {
+    "claims_require_evidence": true,
+    "verified_requires_witness": true,
+    "rejected_claims_enter_memory": false
+  },
+  "heartbeat_seconds": 60,
+  "lease_seconds": 300,
+  "max_task_attempts": 3
+}

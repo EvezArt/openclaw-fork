@@ -1,0 +1,33 @@
+name: EVEZ Swarm Foundation
+
+on:
+  push:
+    branches: [main, 'evez-swarm/**']
+    paths:
+      - 'swarm/**'
+      - '.github/workflows/evez_swarm_foundation.yml'
+  pull_request:
+    paths:
+      - 'swarm/**'
+      - '.github/workflows/evez_swarm_foundation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-smoke-test:
+    name: Swarm Contract Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate Python syntax
+        run: python -m py_compile swarm/control_plane.py swarm/healthcheck.py
+      - name: Exercise task lifecycle
+        run: python swarm/healthcheck.py
+      - name: Remove smoke-test state
+        if: always()
+        run: rm -f state/swarm-smoke.db state/swarm-smoke.db-shm state/swarm-smoke.db-wal
