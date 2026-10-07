@@ -1,0 +1,53 @@
+name: EVEZ mobile mesh
+
+on:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile_mesh.yml"
+  push:
+    branches:
+      - main
+      - "evez-mobile-audio-mesh/**"
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile relay
+        run: python3 -m py_compile mobile/linux/evez_mobile_relay.py
+
+      - name: Validate schema
+        run: python3 -m json.tool mobile/protocol/mobile_observation.schema.json >/dev/null
+
+      - name: Shell syntax
+        run: |
+          bash -n mobile/termux/install.sh
+          bash -n mobile/termux/evezctl
+          bash -n mobile/termux/evez-mobile-daemon.sh
+          bash -n mobile/termux/service/evez-mobile/run
+
+      - name: Relay unit test
+        run: python3 mobile/tests/test_relay.py
+
+      - name: Relay smoke
+        run: |
+          python3 mobile/linux/evez_mobile_relay.py &
+          PID=$!
+          trap "kill $PID" EXIT
+          python3 - <<'PY'
+import json
+import urllib.request
+
+with urllib.request.urlopen("http://127.0.0.1:8788/health", timeout=5) as response:
+    body = json.loads(response.read())
+
+assert body["ok"] is True
+assert body["service"] == "evez-mobile-relay"
+print("relay: PASS")
+PY

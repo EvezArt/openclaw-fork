@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EVEZ Mobile Observation",
+  "type": "object",
+  "required": [
+    "protocol",
+    "kind",
+    "node_id",
+    "message_id",
+    "created_at",
+    "payload",
+    "digest",
+    "evidence_class"
+  ],
+  "properties": {
+    "protocol": {"const": "nextclaw/1"},
+    "kind": {"const": "evidence"},
+    "node_id": {"type": "string", "minLength": 1},
+    "message_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evidence_class": {"const": "mobile_observation"},
+    "payload": {"type": "object", "additionalProperties": true}
+  },
+  "additionalProperties": true
+}
