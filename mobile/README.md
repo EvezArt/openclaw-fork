@@ -19,7 +19,7 @@ Galaxy A16 + Termux is the phone-side operator and sensor node. Linux is the com
       Hermes : configured URL
       GitHub / EVEZ repos
 
-The bridge is observation-first. It creates structured telemetry, hashes it, and submits it to the Linux relay. Raw microphone recordings stay local unless upload is explicitly enabled.
+The bridge is observation-first. It creates structured telemetry, hashes it, and submits it to the Linux relay. Raw microphone recordings stay local. The bridge sends audio metadata and SHA-256 hashes, not raw audio.
 
 The audio layer treats the guitar, interface, speakers and amps as user-owned I/O. It can inspect Android audio routing and optionally capture short local clips. It does not implement RF jamming, spoofing, credential capture, device takeover, or interference with third-party communications.
 
@@ -96,8 +96,7 @@ An observation proves what the sensor pipeline recorded. It does not, by itself,
 Defaults are local-only:
 
     EVEZ_CAPTURE_AUDIO=false
-    EVEZ_UPLOAD_AUDIO=false
 
-When capture is enabled, the daemon records a short clip and sends its hash plus metadata. Uploading the raw clip is a separate explicit setting.
+When capture is enabled, the daemon records a short local clip and sends its hash plus metadata. Raw audio is not uploaded by this bridge.
 
 This makes the same phone bridge useful for instrument practice, amp and speaker diagnostics, acoustic events, and time-correlated EVEZ telemetry without making continuous recording the default.
