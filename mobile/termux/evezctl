@@ -54,11 +54,19 @@ case "$1" in
       --data "$(jq -nc --arg p "$PROMPT" --arg n "$EVEZ_NODE_ID" '{prompt:$p,source_node:$n}')" \
       $EVEZ_NEXTCLAW_URL
     ;;
+open_chrome() {
+  url=$1
+  if [ -x /system/bin/am ]; then
+    /system/bin/am start       -a android.intent.action.VIEW       -d "$url"       -n com.android.chrome/com.google.android.apps.chrome.Main >/dev/null 2>&1 && return 0
+  fi
+  termux-open-url "$url"
+}
+
   openclaw)
-    termux-open-url $EVEZ_OPENCLAW_URL
+    open_chrome $EVEZ_OPENCLAW_URL
     ;;
   hermes)
-    termux-open-url $EVEZ_HERMES_URL
+    open_chrome $EVEZ_HERMES_URL
     ;;
   *)
     usage
