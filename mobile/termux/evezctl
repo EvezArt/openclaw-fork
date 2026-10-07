@@ -1,0 +1,67 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -eo pipefail
+
+CFG=$HOME/.config/evez-mobile.env
+if [ -f $CFG ]; then
+  . $CFG
+fi
+
+[ "$#" -gt 0 ] || set -- status
+
+usage() {
+  echo "evezctl status|observe|bluetooth|audio|mission|openclaw|hermes"
+}
+
+case "$1" in
+  status)
+    echo "node=$EVEZ_NODE_ID"
+    echo "observation=$EVEZ_OBSERVATION_URL"
+    echo "nextclaw=$EVEZ_NEXTCLAW_URL"
+    for c in termux-battery-status termux-wifi-connectioninfo termux-audio-info termux-sensor; do
+      if command -v $c >/dev/null 2>&1; then
+        echo "$c=present"
+      else
+        echo "$c=missing"
+      fi
+    done
+    ;;
+  observe)
+    evez-mobile-daemon --once
+    ;;
+  bluetooth)
+    if command -v termux-bluetooth-scaninfo >/dev/null 2>&1; then
+      termux-bluetooth-scaninfo
+    elif command -v termux-bluetooth-scan >/dev/null 2>&1; then
+      termux-bluetooth-scan info
+    elif command -v termux-audio-info >/dev/null 2>&1; then
+      termux-audio-info
+    else
+      echo "No Bluetooth observation command is installed."
+    fi
+    ;;
+  audio)
+    termux-audio-info
+    ;;
+  mission)
+    shift
+    PROMPT="$*"
+    if [ -z "$PROMPT" ]; then
+      echo "mission text required" >&2
+      exit 2
+    fi
+    curl -fsS \
+      -H 'Content-Type: application/json' \
+      --data "$(jq -nc --arg p "$PROMPT" --arg n "$EVEZ_NODE_ID" '{prompt:$p,source_node:$n}')" \
+      $EVEZ_NEXTCLAW_URL
+    ;;
+  openclaw)
+    termux-open-url $EVEZ_OPENCLAW_URL
+    ;;
+  hermes)
+    termux-open-url $EVEZ_HERMES_URL
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac
