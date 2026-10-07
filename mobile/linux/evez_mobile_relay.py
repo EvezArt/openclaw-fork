@@ -44,13 +44,13 @@ def previous_hash() -> str:
 
 def store(envelope: dict) -> dict:
     STATE.parent.mkdir(parents=True, exist_ok=True)
-    record = {
-        "received_at": now(),
-        "previous_observation_hash": previous_hash(),
-        "envelope": envelope,
-    }
-    record["observation_hash"] = hashlib.sha256(canonical(record)).hexdigest()
     with LOCK:
+        record = {
+            "received_at": now(),
+            "previous_observation_hash": previous_hash(),
+            "envelope": envelope,
+        }
+        record["observation_hash"] = hashlib.sha256(canonical(record)).hexdigest()
         with STATE.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, sort_keys=True) + "\n")
     return {
