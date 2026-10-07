@@ -1,0 +1,16 @@
+[Unit]
+Description=EVEZ Mobile Relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/evez/openclaw-fork
+ExecStart=/usr/bin/python3 %h/evez/openclaw-fork/mobile/linux/evez_mobile_relay.py
+Restart=on-failure
+RestartSec=3
+Environment=EVEZ_MOBILE_RELAY_HOST=127.0.0.1
+Environment=EVEZ_MOBILE_RELAY_PORT=8788
+
+[Install]
+WantedBy=default.target
