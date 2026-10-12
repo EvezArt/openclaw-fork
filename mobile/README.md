@@ -32,21 +32,9 @@ Install Termux and the matching Termux:API add-on, then:
     pkg install -y termux-api
     termux-wake-lock
 
-Commands used when available:
+Copy mobile/termux/evez-mobile.env.example to $HOME/.config/evez-mobile.env. Replace the example tailnet host and EVEZ_RELAY_TOKEN with your actual values; never commit the real token. Generate a long random token, for example with openssl rand -hex 32, and use the same token in the Linux relay's private environment file. Protect the phone config with chmod 600 $HOME/.config/evez-mobile.env.
 
-    termux-battery-status
-    termux-wifi-connectioninfo
-    termux-sensor
-    termux-audio-info
-    termux-microphone-record
-    termux-media-player
-    Bluetooth scan command available in the installed API build
-
-Copy mobile/termux/evez-mobile.env.example to:
-
-    $HOME/.config/evez-mobile.env
-
-Set the Linux tailnet URL and operator URLs, then:
+Then:
 
     bash mobile/termux/install.sh
     evezctl status
@@ -63,15 +51,15 @@ Background service:
 
 ## Linux
 
+Create the relay's private environment file from mobile/linux/evez-mobile-relay.env.example at $HOME/.config/evez-mobile-relay.env, replace the placeholder token, and set mode 600. The systemd user service reads this file. Do not put the real token in the repository, command history, screenshots, or logs.
+
 Run the relay:
 
     python3 mobile/linux/evez_mobile_relay.py
 
-It binds to 127.0.0.1:8788 by default. Expose it only to the tailnet:
+It binds to 127.0.0.1:8788 by default. Expose it only to the tailnet with Tailscale Serve; keep the listener local and OpenClaw Gateway authentication enabled.
 
-    tailscale serve 8788
-
-OpenClaw's current browser Control UI is served by the Gateway on port 18789. Keep Gateway authentication enabled.
+Fail-closed behavior: both observation and mission POSTs require Authorization: Bearer. If the relay has no configured token, writes return 503; a missing/wrong token returns 401. The relay rejects oversized/non-JSON requests and validates the SHA-256 digest of the canonical payload before storing an observation. The token is shared by the phone and relay; rotate it on suspected exposure.
 
 ## Operator commands
 
@@ -83,13 +71,11 @@ OpenClaw's current browser Control UI is served by the Gateway on port 18789. Ke
     evezctl openclaw
     evezctl hermes
 
-The mission path feeds the existing NextClaw gateway. The phone does not become the authoritative task database.
+The mission path feeds the existing NextClaw gateway through the authenticated relay. The phone does not become the authoritative task database. Do not add arbitrary shell execution to the mission endpoint.
 
 ## Evidence
 
-Each observation carries node_id, created_at, source, payload, digest and the NextClaw protocol identity. The Linux relay appends a hash-chained JSONL record.
-
-An observation proves what the sensor pipeline recorded. It does not, by itself, prove the interpretation attached to that observation.
+Each observation carries node_id, created_at, source, payload, digest and the NextClaw protocol identity. The Linux relay appends a hash-chained JSONL record. A digest detects payload mutation after generation; the chain detects edits relative to a trusted checkpoint. Neither proves that a sensor's measurement or its interpretation is true.
 
 ## Audio
 
@@ -97,6 +83,4 @@ Defaults are local-only:
 
     EVEZ_CAPTURE_AUDIO=false
 
-When capture is enabled, the daemon records a short local clip and sends its hash plus metadata. Raw audio is not uploaded by this bridge.
-
-This makes the same phone bridge useful for instrument practice, amp and speaker diagnostics, acoustic events, and time-correlated EVEZ telemetry without making continuous recording the default.
+When capture is explicitly enabled, the daemon records a short local clip and sends its hash plus metadata. Raw audio is not uploaded by this bridge. Keep audio capture opt-in and limited to your own equipment and authorized environments.
