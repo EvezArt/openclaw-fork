@@ -48,6 +48,18 @@ def previous_hash() -> str:
 def store(envelope: dict) -> dict:
     STATE.parent.mkdir(parents=True, exist_ok=True)
     with LOCK:
+        message_id = envelope.get("message_id")
+        if isinstance(message_id, str) and STATE.exists():
+            # Durable replay check: the append-only ledger is authoritative across restarts.
+            with STATE.open("r", encoding="utf-8") as existing:
+                for line in existing:
+                    try:
+                        old = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    old_envelope = old.get("envelope", {})
+                    if isinstance(old_envelope, dict) and old_envelope.get("message_id") == message_id:
+                        raise ValueError("duplicate_message_id")
         record = {
             "received_at": now(),
             "previous_observation_hash": previous_hash(),
@@ -64,12 +76,7 @@ def store(envelope: dict) -> dict:
 
 
 def forward(payload: dict) -> tuple[int, dict]:
-    request = Request(
-        NEXTCLAW,
-        data=canonical(payload),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    request = Request(NEXTCLAW, data=canonical(payload), headers={"Content-Type": "application/json"}, method="POST")
     try:
         with urlopen(request, timeout=15) as response:
             data = response.read(MAX_BODY_BYTES + 1)
@@ -140,30 +147,21 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path == "/health":
             self.reply(200, {
-                "ok": True,
-                "service": "evez-mobile-relay",
+                "ok": True, "service": "evez-mobile-relay",
                 "mission_upstream_configured": bool(NEXTCLAW),
                 "openclaw_url_configured": bool(OPENCLAW),
                 "hermes_url_configured": bool(HERMES),
                 "write_auth_configured": bool(RELAY_TOKEN),
             })
             return
-
         if self.path == "/v1/control":
-            self.reply(200, {
-                "ok": True,
-                "policy": {
-                    "mission": True,
-                    "arbitrary_shell": False,
-                    "secret_access": False,
-                    "deployment": "verification_gated",
-                    "writes_require_bearer_auth": True,
-                    "observation_digest_validation": True,
-                    "max_request_bytes": MAX_BODY_BYTES,
-                },
-            })
+            self.reply(200, {"ok": True, "policy": {
+                "mission": True, "arbitrary_shell": False, "secret_access": False,
+                "deployment": "verification_gated", "writes_require_bearer_auth": True,
+                "observation_digest_validation": True, "durable_message_id_replay_check": True,
+                "max_request_bytes": MAX_BODY_BYTES,
+            }})
             return
-
         self.reply(404, {"ok": False, "error": "not_found"})
 
     def do_POST(self) -> None:
@@ -172,8 +170,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not self.authorized():
             self.reply(503 if not RELAY_TOKEN else 401, {
-                "ok": False,
-                "error": "write_auth_not_configured" if not RELAY_TOKEN else "unauthorized",
+                "ok": False, "error": "write_auth_not_configured" if not RELAY_TOKEN else "unauthorized",
             })
             return
         try:
