@@ -1,10 +1,17 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -eo pipefail
 
-CFG=$HOME/.config/evez-mobile.env
-if [ -f $CFG ]; then
-  . $CFG
+CFG="$HOME/.config/evez-mobile.env"
+if [ -f "$CFG" ]; then
+  . "$CFG"
 fi
+
+EVEZ_NODE_ID="${EVEZ_NODE_ID:-evez-a16}"
+EVEZ_OBSERVATION_URL="${EVEZ_OBSERVATION_URL:-}"
+EVEZ_NEXTCLAW_URL="${EVEZ_NEXTCLAW_URL:-}"
+EVEZ_OPENCLAW_URL="${EVEZ_OPENCLAW_URL:-}"
+EVEZ_HERMES_URL="${EVEZ_HERMES_URL:-}"
+EVEZ_RELAY_TOKEN="${EVEZ_RELAY_TOKEN:-}"
 
 [ "$#" -gt 0 ] || set -- status
 
@@ -12,13 +19,22 @@ usage() {
   echo "evezctl status|observe|bluetooth|audio|mission|openclaw|hermes"
 }
 
+open_chrome() {
+  url="$1"
+  if [ -x /system/bin/am ]; then
+    /system/bin/am start -a android.intent.action.VIEW -d "$url" -n com.android.chrome/com.google.android.apps.chrome.Main >/dev/null 2>&1 && return 0
+  fi
+  termux-open-url "$url"
+}
+
 case "$1" in
   status)
     echo "node=$EVEZ_NODE_ID"
-    echo "observation=$EVEZ_OBSERVATION_URL"
-    echo "nextclaw=$EVEZ_NEXTCLAW_URL"
+    echo "observation_configured=$([ -n "$EVEZ_OBSERVATION_URL" ] && echo yes || echo no)"
+    echo "mission_configured=$([ -n "$EVEZ_NEXTCLAW_URL" ] && echo yes || echo no)"
+    echo "relay_auth_configured=$([ -n "$EVEZ_RELAY_TOKEN" ] && echo yes || echo no)"
     for c in termux-battery-status termux-wifi-connectioninfo termux-audio-info termux-sensor; do
-      if command -v $c >/dev/null 2>&1; then
+      if command -v "$c" >/dev/null 2>&1; then
         echo "$c=present"
       else
         echo "$c=missing"
@@ -49,24 +65,27 @@ case "$1" in
       echo "mission text required" >&2
       exit 2
     fi
-    curl -fsS \
+    if [ -z "$EVEZ_RELAY_TOKEN" ]; then
+      echo "EVEZ_RELAY_TOKEN is required; refusing unauthenticated mission request." >&2
+      exit 2
+    fi
+    if [ -z "$EVEZ_NEXTCLAW_URL" ]; then
+      echo "EVEZ_NEXTCLAW_URL is not configured." >&2
+      exit 2
+    fi
+    curl -fsS --max-time 20 \
       -H 'Content-Type: application/json' \
+      -H "Authorization: Bearer $EVEZ_RELAY_TOKEN" \
       --data "$(jq -nc --arg p "$PROMPT" --arg n "$EVEZ_NODE_ID" '{prompt:$p,source_node:$n}')" \
-      $EVEZ_NEXTCLAW_URL
+      "$EVEZ_NEXTCLAW_URL"
     ;;
-open_chrome() {
-  url=$1
-  if [ -x /system/bin/am ]; then
-    /system/bin/am start       -a android.intent.action.VIEW       -d "$url"       -n com.android.chrome/com.google.android.apps.chrome.Main >/dev/null 2>&1 && return 0
-  fi
-  termux-open-url "$url"
-}
-
   openclaw)
-    open_chrome $EVEZ_OPENCLAW_URL
+    [ -n "$EVEZ_OPENCLAW_URL" ] || { echo "EVEZ_OPENCLAW_URL is not configured." >&2; exit 2; }
+    open_chrome "$EVEZ_OPENCLAW_URL"
     ;;
   hermes)
-    open_chrome $EVEZ_HERMES_URL
+    [ -n "$EVEZ_HERMES_URL" ] || { echo "EVEZ_HERMES_URL is not configured." >&2; exit 2; }
+    open_chrome "$EVEZ_HERMES_URL"
     ;;
   *)
     usage
