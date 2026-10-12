@@ -28,7 +28,7 @@ The audio layer treats the guitar, interface, speakers and amps as user-owned I/
 Install Termux and the matching Termux:API add-on, then:
 
     pkg update
-    pkg install -y curl jq python openssl
+    pkg install -y curl jq python openssl coreutils
     pkg install -y termux-api
     termux-wake-lock
 
