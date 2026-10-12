@@ -1,33 +1,27 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -eo pipefail
 
-CFG=$HOME/.config/evez-mobile.env
-if [ -f $CFG ]; then
-  . $CFG
+CFG="$HOME/.config/evez-mobile.env"
+if [ -f "$CFG" ]; then
+  . "$CFG"
 fi
 
-NODE_ID=evez-a16
-INTERVAL=30
-AUDIO_SECONDS=8
-CAPTURE_AUDIO=false
-DATA_DIR=$HOME/.local/share/evez-mobile
-OBS_URL=
+NODE_ID="${EVEZ_NODE_ID:-evez-a16}"
+INTERVAL="${EVEZ_INTERVAL_SECONDS:-30}"
+AUDIO_SECONDS="${EVEZ_AUDIO_SECONDS:-8}"
+CAPTURE_AUDIO="${EVEZ_CAPTURE_AUDIO:-false}"
+DATA_DIR="${EVEZ_DATA_DIR:-$HOME/.local/share/evez-mobile}"
+OBS_URL="${EVEZ_OBSERVATION_URL:-}"
+RELAY_TOKEN="${EVEZ_RELAY_TOKEN:-}"
 
-[ -n "$EVEZ_NODE_ID" ] && NODE_ID=$EVEZ_NODE_ID
-[ -n "$EVEZ_INTERVAL_SECONDS" ] && INTERVAL=$EVEZ_INTERVAL_SECONDS
-[ -n "$EVEZ_AUDIO_SECONDS" ] && AUDIO_SECONDS=$EVEZ_AUDIO_SECONDS
-[ -n "$EVEZ_CAPTURE_AUDIO" ] && CAPTURE_AUDIO=$EVEZ_CAPTURE_AUDIO
-[ -n "$EVEZ_DATA_DIR" ] && DATA_DIR=$EVEZ_DATA_DIR
-[ -n "$EVEZ_OBSERVATION_URL" ] && OBS_URL=$EVEZ_OBSERVATION_URL
-
-AUDIO_DIR=$DATA_DIR/audio
-mkdir -p $DATA_DIR $AUDIO_DIR
+AUDIO_DIR="$DATA_DIR/audio"
+mkdir -p "$DATA_DIR" "$AUDIO_DIR"
 
 json_cmd() {
-  cmd=$1
+  cmd="$1"
   shift
-  if command -v $cmd >/dev/null 2>&1; then
-    timeout 8s $cmd "$@" 2>/dev/null || echo '{}'
+  if command -v "$cmd" >/dev/null 2>&1; then
+    timeout 8s "$cmd" "$@" 2>/dev/null || echo '{}'
   else
     echo '{}'
   fi
@@ -56,19 +50,15 @@ capture_audio() {
   command -v termux-microphone-record >/dev/null 2>&1 || return 0
 
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
-  file=$AUDIO_DIR/$stamp.opus
+  file="$AUDIO_DIR/$stamp.opus"
 
-  if termux-microphone-record -f $file -l $AUDIO_SECONDS -e opus >/dev/null 2>&1; then
-    python - $file <<'PY'
+  if termux-microphone-record -f "$file" -l "$AUDIO_SECONDS" -e opus >/dev/null 2>&1; then
+    python - "$file" <<'PY'
 import hashlib, json, os, sys
 path = sys.argv[1]
 with open(path, "rb") as fh:
     digest = hashlib.sha256(fh.read()).hexdigest()
-print(json.dumps({
-    "path": path,
-    "sha256": digest,
-    "bytes": os.path.getsize(path),
-}, sort_keys=True))
+print(json.dumps({"path": path, "sha256": digest, "bytes": os.path.getsize(path)}, sort_keys=True))
 PY
   fi
 }
@@ -99,7 +89,8 @@ once() {
       audio_clip:$audio_clip
     }')
 
-  digest=$(printf '%s' "$payload" | sha256sum | awk '{print $1}')
+  # Match the relay's canonical JSON exactly: UTF-8, sorted keys, compact separators.
+  digest=$(printf '%s' "$payload" | python -c 'import json,sys; print(json.dumps(json.load(sys.stdin), sort_keys=True, separators=(",", ":"), ensure_ascii=False), end="")' | sha256sum | awk '{print $1}')
   prefix=$(printf '%s' "$digest" | cut -c1-16)
 
   envelope=$(jq -cn \
@@ -119,13 +110,18 @@ once() {
       evidence_class:"mobile_observation"
     }')
 
-  printf '%s\n' "$envelope" > $DATA_DIR/last-observation.json
+  printf '%s\n' "$envelope" > "$DATA_DIR/last-observation.json"
 
   if [ -n "$OBS_URL" ] && command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 10 \
-      -H 'Content-Type: application/json' \
-      --data "$envelope" \
-      $OBS_URL >/dev/null || true
+    if [ -z "$RELAY_TOKEN" ]; then
+      echo "EVEZ_RELAY_TOKEN is required; observation kept local and not sent." >&2
+    else
+      curl -fsS --max-time 10 \
+        -H 'Content-Type: application/json' \
+        -H "Authorization: Bearer $RELAY_TOKEN" \
+        --data "$envelope" \
+        "$OBS_URL" >/dev/null || true
+    fi
   fi
 
   printf '%s\n' "$envelope"
@@ -138,5 +134,5 @@ fi
 
 while true; do
   once || true
-  sleep $INTERVAL
+  sleep "$INTERVAL"
 done
