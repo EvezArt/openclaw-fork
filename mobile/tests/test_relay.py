@@ -23,16 +23,11 @@ def main() -> None:
         relay.STATE = Path(tmp) / "mobile_observations.jsonl"
         envelopes = [
             {
-                "protocol": "nextclaw/1",
-                "kind": "evidence",
-                "node_id": "test-a16",
-                "message_id": "test-" + str(i),
-                "created_at": "2026-10-07T00:00:%02dZ" % i,
-                "payload": {"sequence": i},
-                "digest": ("%064x" % i),
+                "protocol": "nextclaw/1", "kind": "evidence", "node_id": "test-a16",
+                "message_id": "test-" + str(i), "created_at": "2026-10-07T00:00:%02dZ" % i,
+                "payload": {"sequence": i}, "digest": ("%064x" % i),
                 "evidence_class": "mobile_observation",
-            }
-            for i in range(12)
+            } for i in range(12)
         ]
         results = [None] * len(envelopes)
         def worker(index: int) -> None:
@@ -49,8 +44,15 @@ def main() -> None:
             assert current["previous_observation_hash"] == previous["observation_hash"]
         hashes = {row["observation_hash"] for row in rows}
         assert len(hashes) == len(rows)
+        try:
+            relay.store(envelopes[0])
+        except ValueError as exc:
+            assert str(exc) == "duplicate_message_id"
+        else:
+            raise AssertionError("duplicate message ID must be rejected")
         print("mobile-relay-chain: PASS")
         print("mobile-relay-digest: PASS")
+        print("mobile-relay-replay-guard: PASS")
 
 
 if __name__ == "__main__":
