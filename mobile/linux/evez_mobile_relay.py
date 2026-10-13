@@ -45,36 +45,76 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def previous_hash() -> str:
+def legacy_canonical(obj: object) -> bytes:
+    # Compatibility verifier for records written before the JCS profile was declared.
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def ledger_state() -> tuple[str, set[str]]:
+    """Verify the full ledger and return the last hash plus recorded message IDs.
+
+    Unversioned historic records are checked against the legacy serializer first,
+    then JCS for the short transition period before hash_profile was introduced.
+    New records always carry hash_profile=RFC8785_JCS_SHA256.
+    """
+    previous = "0" * 64
+    seen_ids: set[str] = set()
     if not STATE.exists():
-        return "0" * 64
-    lines = STATE.read_text(encoding="utf-8").splitlines()
-    if not lines:
-        return "0" * 64
+        return previous, seen_ids
     try:
-        return json.loads(lines[-1]).get("observation_hash", "0" * 64)
-    except (json.JSONDecodeError, AttributeError):
-        return "0" * 64
+        with STATE.open("r", encoding="utf-8") as source:
+            for line in source:
+                if not line.strip():
+                    raise ValueError("ledger_blank_line")
+                try:
+                    row = json.loads(line, object_pairs_hook=reject_duplicate_keys)
+                except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+                    raise ValueError("ledger_record_invalid") from None
+                if not isinstance(row, dict):
+                    raise ValueError("ledger_record_invalid")
+                stored_hash = row.get("observation_hash")
+                if not isinstance(stored_hash, str) or len(stored_hash) != 64 or any(ch not in "0123456789abcdef" for ch in stored_hash):
+                    raise ValueError("ledger_hash_invalid")
+                if row.get("previous_observation_hash") != previous:
+                    raise ValueError("ledger_chain_mismatch")
+                body = dict(row)
+                body.pop("observation_hash", None)
+                profile = body.get("hash_profile")
+                try:
+                    if profile == "RFC8785_JCS_SHA256":
+                        candidates = [canonical(body)]
+                    elif profile is None:
+                        candidates = [legacy_canonical(body), canonical(body)]
+                    else:
+                        raise ValueError("ledger_hash_profile_unknown")
+                except (rfc8785.CanonicalizationError, TypeError, ValueError):
+                    raise ValueError("ledger_record_not_canonicalizable") from None
+                if not any(hmac.compare_digest(hashlib.sha256(candidate).hexdigest(), stored_hash) for candidate in candidates):
+                    raise ValueError("ledger_hash_mismatch")
+                envelope = body.get("envelope")
+                if isinstance(envelope, dict):
+                    message_id = envelope.get("message_id")
+                    if isinstance(message_id, str) and message_id:
+                        if message_id in seen_ids:
+                            raise ValueError("ledger_duplicate_message_id")
+                        seen_ids.add(message_id)
+                previous = stored_hash
+    except OSError:
+        raise ValueError("ledger_unreadable") from None
+    return previous, seen_ids
 
 
 def store(envelope: dict) -> dict:
     STATE.parent.mkdir(parents=True, exist_ok=True)
     with LOCK:
+        previous, seen_ids = ledger_state()
         message_id = envelope.get("message_id")
-        if isinstance(message_id, str) and STATE.exists():
-            # Durable replay check: the append-only ledger is authoritative across restarts.
-            with STATE.open("r", encoding="utf-8") as existing:
-                for line in existing:
-                    try:
-                        old = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    old_envelope = old.get("envelope", {})
-                    if isinstance(old_envelope, dict) and old_envelope.get("message_id") == message_id:
-                        raise ValueError("duplicate_message_id")
+        if isinstance(message_id, str) and message_id in seen_ids:
+            raise ValueError("duplicate_message_id")
         record = {
             "received_at": now(),
-            "previous_observation_hash": previous_hash(),
+            "previous_observation_hash": previous,
+            "hash_profile": "RFC8785_JCS_SHA256",
             "envelope": envelope,
         }
         record["observation_hash"] = hashlib.sha256(canonical(record)).hexdigest()
@@ -88,7 +128,6 @@ def store(envelope: dict) -> dict:
         "observation_hash": record["observation_hash"],
         "previous_observation_hash": record["previous_observation_hash"],
     }
-
 
 def forward(payload: dict) -> tuple[int, dict]:
     request = Request(NEXTCLAW, data=canonical(payload), headers={"Content-Type": "application/json"}, method="POST")
