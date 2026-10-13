@@ -38,6 +38,7 @@ Then:
 
     bash mobile/termux/install.sh
     evezctl status
+    evezctl mesh
     evezctl observe
 
 Background service:
@@ -77,6 +78,8 @@ Fail-closed behavior: both observation and mission POSTs require Authorization: 
     evezctl mission "inspect the latest verified EVEZ state"
     evezctl openclaw
     evezctl hermes
+
+`evezctl mesh` is a read-only phone-side reachability check. It checks the configured relay health endpoint (derived from `EVEZ_OBSERVATION_URL`), RuView health and nodes endpoints, and the OpenClaw/Hermes web surfaces using GET requests only. It prints status categories, not response bodies, URLs, or credentials. A 200 from RuView proves only that the API answered; it does not prove that a real CSI device is online. A 401/403 means the endpoint is reachable but requires authorization; 502/503/504 points to an upstream problem.
 
 The mission path feeds the existing NextClaw gateway through the authenticated relay. The phone does not become the authoritative task database. Do not add arbitrary shell execution to the mission endpoint.
 
