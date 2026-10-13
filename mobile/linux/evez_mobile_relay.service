@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=%h/evez/openclaw-fork
 EnvironmentFile=-%h/.config/evez-mobile-relay.env
-ExecStart=/usr/bin/python3 %h/evez/openclaw-fork/mobile/linux/evez_mobile_relay.py
+ExecStart=%h/evez/openclaw-fork/.venv/bin/python %h/evez/openclaw-fork/mobile/linux/evez_mobile_relay.py
 Restart=on-failure
 RestartSec=3
 Environment=EVEZ_MOBILE_RELAY_HOST=127.0.0.1
