@@ -45,12 +45,27 @@ jobs:
           trap "kill $PID" EXIT
           python3 - <<'PY'
 import json
+import time
+import urllib.error
 import urllib.request
 
-with urllib.request.urlopen("http://127.0.0.1:8788/health", timeout=5) as response:
-    body = json.loads(response.read())
+url = "http://127.0.0.1:8788/health"
+last_error = None
+body = None
+for _ in range(50):
+    try:
+        with urllib.request.urlopen(url, timeout=1) as response:
+            body = json.loads(response.read())
+        break
+    except (OSError, urllib.error.URLError) as exc:
+        last_error = exc
+        time.sleep(0.1)
+
+if body is None:
+    raise SystemExit(f"relay did not become ready within 5 seconds: {last_error}")
 
 assert body["ok"] is True
 assert body["service"] == "evez-mobile-relay"
+assert body["write_auth_configured"] is False
 print("relay: PASS")
 PY
