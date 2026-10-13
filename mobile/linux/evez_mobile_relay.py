@@ -11,6 +11,8 @@ import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+import rfc8785
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -26,7 +28,17 @@ LOCK = threading.Lock()
 
 
 def canonical(obj: object) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    # RFC 8785 fixes UTF-16 property ordering and ECMAScript number serialization.
+    return rfc8785.dumps(obj)
+
+
+def reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate_json_property")
+        result[key] = value
+    return result
 
 
 def now() -> str:
@@ -102,7 +114,11 @@ def valid_digest(envelope: dict) -> bool:
         return False
     if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
         return False
-    return hmac.compare_digest(hashlib.sha256(canonical(payload)).hexdigest(), digest)
+    try:
+        actual = hashlib.sha256(canonical(payload)).hexdigest()
+    except (rfc8785.CanonicalizationError, TypeError, ValueError):
+        return False
+    return hmac.compare_digest(actual, digest)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -140,7 +156,7 @@ class Handler(BaseHTTPRequestHandler):
         if len(raw) != size:
             raise ValueError("body_truncated")
         try:
-            payload = json.loads(raw.decode("utf-8"))
+            payload = json.loads(raw.decode("utf-8"), object_pairs_hook=reject_duplicate_keys)
         except (UnicodeDecodeError, json.JSONDecodeError):
             raise ValueError("invalid_json") from None
         if not isinstance(payload, dict):
@@ -183,6 +199,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("unsupported_protocol")
                 if payload.get("kind") != "evidence":
                     raise ValueError("evidence_envelope_required")
+                if payload.get("canonicalization") != "RFC8785_JCS":
+                    raise ValueError("canonicalization_required")
                 if payload.get("evidence_class") != "mobile_observation":
                     raise ValueError("mobile_observation_class_required")
                 if not isinstance(payload.get("message_id"), str) or not payload["message_id"].strip():
