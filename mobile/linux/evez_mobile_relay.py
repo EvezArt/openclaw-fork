@@ -68,6 +68,9 @@ def store(envelope: dict) -> dict:
         record["observation_hash"] = hashlib.sha256(canonical(record)).hexdigest()
         with STATE.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n")
+        # Evidence may contain sensitive sensor metadata; protect the ledger even
+        # when the relay is launched manually rather than by the hardened unit.
+        os.chmod(STATE, 0o600)
     return {
         "stored": True,
         "observation_hash": record["observation_hash"],
@@ -186,6 +189,13 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("message_id_required")
                 if not valid_digest(payload):
                     raise ValueError("digest_mismatch")
+                observed = payload["payload"]
+                if not isinstance(observed.get("node_id"), str) or not observed["node_id"].strip():
+                    raise ValueError("payload_node_id_required")
+                if payload.get("node_id") != observed.get("node_id"):
+                    raise ValueError("node_id_mismatch")
+                if payload.get("created_at") != observed.get("created_at"):
+                    raise ValueError("created_at_mismatch")
                 self.reply(202, {"ok": True, **store(payload)})
                 return
             if not isinstance(payload.get("prompt"), str) or not payload["prompt"].strip():
@@ -203,4 +213,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # Default-deny group/other access to newly created ledger artifacts.
+    os.umask(0o077)
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
