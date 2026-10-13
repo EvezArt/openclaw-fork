@@ -19,6 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pinned dependencies
+        run: python3 -m pip install --require-hashes -r mobile/linux/requirements.txt
+
       - name: Compile relay
         run: python3 -m py_compile mobile/linux/evez_mobile_relay.py
 
