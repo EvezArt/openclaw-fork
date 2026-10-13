@@ -7,6 +7,7 @@ CFG=$HOME/.config/evez-mobile.env
 
 pkg update
 pkg install -y curl jq python openssl coreutils
+python -m pip install --require-hashes -r "$ROOT/mobile/linux/requirements.txt"
 
 mkdir -p "$HOME/.config"
 mkdir -p "$HOME/.local/share/evez-mobile/audio"
