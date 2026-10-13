@@ -89,8 +89,8 @@ once() {
       audio_clip:$audio_clip
     }')
 
-  # Match the relay's canonical JSON exactly: UTF-8, sorted keys, compact separators.
-  digest=$(printf '%s' "$payload" | python -c 'import json,sys; print(json.dumps(json.load(sys.stdin), sort_keys=True, separators=(",", ":"), ensure_ascii=False), end="")' | sha256sum | awk '{print $1}')
+  # Digest the parsed observation with the same RFC 8785 JCS implementation as the relay.
+  digest=$(printf '%s' "$payload" | python -c 'import json,sys,rfc8785; sys.stdout.buffer.write(rfc8785.dumps(json.load(sys.stdin)))' | sha256sum | awk '{print $1}')
   prefix=$(printf '%s' "$digest" | cut -c1-16)
 
   envelope=$(jq -cn \
@@ -101,6 +101,7 @@ once() {
     --argjson payload "$payload" \
     '{
       protocol:"nextclaw/1",
+      canonicalization:"RFC8785_JCS",
       kind:"evidence",
       node_id:$node,
       message_id:("mobile:" + $node + ":" + $created + ":" + $prefix),
