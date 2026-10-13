@@ -12,11 +12,12 @@ EVEZ_NEXTCLAW_URL="${EVEZ_NEXTCLAW_URL:-}"
 EVEZ_OPENCLAW_URL="${EVEZ_OPENCLAW_URL:-}"
 EVEZ_HERMES_URL="${EVEZ_HERMES_URL:-}"
 EVEZ_RELAY_TOKEN="${EVEZ_RELAY_TOKEN:-}"
+EVEZ_RUVIEW_URL="${EVEZ_RUVIEW_URL:-https://vmi3544756.mooneye-shade.ts.net}"
 
 [ "$#" -gt 0 ] || set -- status
 
 usage() {
-  echo "evezctl status|observe|bluetooth|audio|mission|openclaw|hermes"
+  echo "evezctl status|mesh|observe|bluetooth|audio|mission|openclaw|hermes"
 }
 
 open_chrome() {
@@ -25,6 +26,29 @@ open_chrome() {
     /system/bin/am start -a android.intent.action.VIEW -d "$url" -n com.android.chrome/com.google.android.apps.chrome.Main >/dev/null 2>&1 && return 0
   fi
   termux-open-url "$url"
+}
+
+probe_http() {
+  name="$1"
+  url="$2"
+  if [ -z "$url" ]; then
+    printf '%s=%s\n' "$name" "not_configured"
+    return
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    printf '%s=%s\n' "$name" "curl_missing"
+    return
+  fi
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 4 --max-time 8 "$url" 2>/dev/null || true)
+  case "$code" in
+    2??) state="ok" ;;
+    3??) state="redirect" ;;
+    401|403) state="reachable_auth_required" ;;
+    502|503|504) state="upstream_error" ;;
+    000|"") state="unreachable" ;;
+    *) state="degraded_http_$code" ;;
+  esac
+  printf '%s=%s\n' "$name" "$state"
 }
 
 case "$1" in
@@ -40,6 +64,18 @@ case "$1" in
         echo "$c=missing"
       fi
     done
+    ;;
+  mesh)
+    # GET-only probes. Never print response bodies, URLs, headers, or secrets.
+    RELAY_BASE=""
+    if [[ "$EVEZ_OBSERVATION_URL" == */v1/mobile/observation ]]; then
+      RELAY_BASE="${EVEZ_OBSERVATION_URL%/v1/mobile/observation}"
+    fi
+    probe_http "relay_health" "${RELAY_BASE:+$RELAY_BASE/health}"
+    probe_http "ruview_health" "${EVEZ_RUVIEW_URL%/}/health"
+    probe_http "ruview_nodes" "${EVEZ_RUVIEW_URL%/}/api/v1/nodes"
+    probe_http "openclaw_ui" "$EVEZ_OPENCLAW_URL"
+    probe_http "hermes_ui" "$EVEZ_HERMES_URL"
     ;;
   observe)
     evez-mobile-daemon --once
