@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 import hashlib
 import json
+import os
+import stat
 import tempfile
 import threading
+import urllib.error
+import urllib.request
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import sys
@@ -11,7 +16,73 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "linux"))
 import evez_mobile_relay as relay
 
 
-def main() -> None:
+def request_json(url: str, payload=None, token=None):
+    data = None if payload is None else json.dumps(payload).encode("utf-8")
+    headers = {}
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+    if token is not None:
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(url, data=data, headers=headers, method="GET" if payload is None else "POST")
+    try:
+        with urllib.request.urlopen(req, timeout=3) as response:
+            return response.status, json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return exc.code, json.loads(exc.read().decode("utf-8"))
+
+
+def test_http_security_and_digest() -> None:
+    old_state = relay.STATE
+    old_token = relay.RELAY_TOKEN
+    with tempfile.TemporaryDirectory() as tmp:
+        relay.STATE = Path(tmp) / "private" / "observations.jsonl"
+        server = ThreadingHTTPServer(("127.0.0.1", 0), relay.Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        url = f"http://127.0.0.1:{server.server_address[1]}"
+        try:
+            relay.RELAY_TOKEN = ""
+            code, body = request_json(url + "/v1/mobile/observation", {"bad": "payload"})
+            assert code == 503 and body["error"] == "write_auth_not_configured"
+
+            relay.RELAY_TOKEN = "test-only-token"
+            code, body = request_json(url + "/v1/mobile/observation", {"bad": "payload"})
+            assert code == 401 and body["error"] == "unauthorized"
+
+            payload = {"node_id": "test-a16", "created_at": "2026-10-07T00:00:00Z", "sequence": 1}
+            envelope = {
+                "protocol": "nextclaw/1", "kind": "evidence", "node_id": "test-a16",
+                "message_id": "http-test-1", "created_at": payload["created_at"], "payload": payload,
+                "digest": hashlib.sha256(relay.canonical(payload)).hexdigest(),
+                "evidence_class": "mobile_observation",
+            }
+            tampered = {**envelope, "payload": {**payload, "sequence": 2}}
+            code, body = request_json(url + "/v1/mobile/observation", tampered, "test-only-token")
+            assert code == 400 and body["error"] == "digest_mismatch"
+
+            mismatch = {**envelope, "node_id": "other-node"}
+            code, body = request_json(url + "/v1/mobile/observation", mismatch, "test-only-token")
+            assert code == 400 and body["error"] == "node_id_mismatch"
+
+            code, body = request_json(url + "/v1/mobile/observation", envelope, "test-only-token")
+            assert code == 202 and body["ok"] is True
+            code, body = request_json(url + "/v1/mobile/observation", envelope, "test-only-token")
+            assert code == 400 and body["error"] == "duplicate_message_id"
+            assert stat.S_IMODE(relay.STATE.stat().st_mode) == 0o600
+            print("mobile-relay-http-auth: PASS")
+            print("mobile-relay-digest-check: PASS")
+            print("mobile-relay-metadata-match: PASS")
+            print("mobile-relay-replay-guard: PASS")
+            print("mobile-relay-file-permissions: PASS")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=3)
+            relay.STATE = old_state
+            relay.RELAY_TOKEN = old_token
+
+
+def test_hash_chain_and_digest() -> None:
     payload = {"z": 2, "a": "café", "nested": {"b": True}}
     valid = {"payload": payload, "digest": hashlib.sha256(relay.canonical(payload)).hexdigest()}
     assert relay.valid_digest(valid), "canonical digest should validate"
@@ -20,7 +91,7 @@ def main() -> None:
     assert not relay.valid_digest({"payload": payload, "digest": "bad"}), "malformed digest must fail"
 
     with tempfile.TemporaryDirectory() as tmp:
-        relay.STATE = Path(tmp) / "mobile_observations.jsonl"
+        relay.STATE = Path(tmp) / "observations.jsonl"
         envelopes = [
             {
                 "protocol": "nextclaw/1", "kind": "evidence", "node_id": "test-a16",
@@ -51,9 +122,9 @@ def main() -> None:
         else:
             raise AssertionError("duplicate message ID must be rejected")
         print("mobile-relay-chain: PASS")
-        print("mobile-relay-digest: PASS")
-        print("mobile-relay-replay-guard: PASS")
+        print("mobile-relay-canonical-digest: PASS")
 
 
 if __name__ == "__main__":
-    main()
+    test_hash_chain_and_digest()
+    test_http_security_and_digest()
