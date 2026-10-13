@@ -53,11 +53,18 @@ Background service:
 
 Create the relay's private environment file from mobile/linux/evez-mobile-relay.env.example at $HOME/.config/evez-mobile-relay.env, replace the placeholder token, and set mode 600. The systemd user service reads this file. Do not put the real token in the repository, command history, screenshots, or logs.
 
-Run the relay:
+From the repository root, install the pinned RFC 8785 dependency in a virtual environment:
 
-    python3 mobile/linux/evez_mobile_relay.py
+    python3 -m venv .venv
+    .venv/bin/python -m pip install --require-hashes -r mobile/linux/requirements.txt
 
-It binds to 127.0.0.1:8788 by default. Expose it only to the tailnet with Tailscale Serve; keep the listener local and OpenClaw Gateway authentication enabled.
+Run the relay with the same environment:
+
+    .venv/bin/python mobile/linux/evez_mobile_relay.py
+
+The systemd user unit expects this virtual environment at $HOME/evez/openclaw-fork/.venv; adjust WorkingDirectory and ExecStart in your local unit if your checkout lives elsewhere. It binds to 127.0.0.1:8788 by default. Expose it only to the tailnet with Tailscale Serve; keep the listener local and OpenClaw Gateway authentication enabled.
+
+Observation digests use RFC 8785 JSON Canonicalization Scheme (JCS), declared as RFC8785_JCS in each envelope. The phone and relay use the same pinned implementation so hashes are reproducible across runtimes.
 
 Fail-closed behavior: both observation and mission POSTs require Authorization: Bearer. If the relay has no configured token, writes return 503; a missing/wrong token returns 401. The relay rejects oversized/non-JSON requests and validates the SHA-256 digest of the canonical payload before storing an observation. The token is shared by the phone and relay; rotate it on suspected exposure.
 
