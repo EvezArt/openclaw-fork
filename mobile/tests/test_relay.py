@@ -51,11 +51,15 @@ def test_http_security_and_digest() -> None:
 
             payload = {"node_id": "test-a16", "created_at": "2026-10-07T00:00:00Z", "sequence": 1}
             envelope = {
-                "protocol": "nextclaw/1", "kind": "evidence", "node_id": "test-a16",
+                "protocol": "nextclaw/1", "canonicalization": "RFC8785_JCS", "kind": "evidence", "node_id": "test-a16",
                 "message_id": "http-test-1", "created_at": payload["created_at"], "payload": payload,
                 "digest": hashlib.sha256(relay.canonical(payload)).hexdigest(),
                 "evidence_class": "mobile_observation",
             }
+            legacy = {key: value for key, value in envelope.items() if key != "canonicalization"}
+            code, body = request_json(url + "/v1/mobile/observation", legacy, "test-only-token")
+            assert code == 400 and body["error"] == "canonicalization_required"
+
             tampered = {**envelope, "payload": {**payload, "sequence": 2}}
             code, body = request_json(url + "/v1/mobile/observation", tampered, "test-only-token")
             assert code == 400 and body["error"] == "digest_mismatch"
@@ -80,6 +84,13 @@ def test_http_security_and_digest() -> None:
             thread.join(timeout=3)
             relay.STATE = old_state
             relay.RELAY_TOKEN = old_token
+
+
+def test_jcs_vectors() -> None:
+    vector = {"numbers": [333333333.33333329, 1e30, 4.50, 0.002, 1e-27]}
+    expected = b'{"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27]}'
+    assert relay.canonical(vector) == expected, "RFC 8785 number canonicalization vector failed"
+    print("mobile-relay-rfc8785-vector: PASS")
 
 
 def test_hash_chain_and_digest() -> None:
@@ -126,5 +137,6 @@ def test_hash_chain_and_digest() -> None:
 
 
 if __name__ == "__main__":
+    test_jcs_vectors()
     test_hash_chain_and_digest()
     test_http_security_and_digest()
