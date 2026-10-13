@@ -25,6 +25,10 @@ HERMES = os.environ.get("EVEZ_HERMES_URL", "")
 RELAY_TOKEN = os.environ.get("EVEZ_RELAY_TOKEN", "")
 MAX_BODY_BYTES = 1024 * 1024
 LOCK = threading.Lock()
+LEDGER_CACHE_PATH: str | None = None
+LEDGER_SIGNATURE: tuple[int, int, int, int] | None = None
+LEDGER_LAST_HASH = "0" * 64
+LEDGER_MESSAGE_IDS: set[str] = set()
 
 
 def canonical(obj: object) -> bytes:
@@ -104,25 +108,52 @@ def ledger_state() -> tuple[str, set[str]]:
     return previous, seen_ids
 
 
+def ledger_signature() -> tuple[int, int, int, int] | None:
+    try:
+        stat_result = STATE.stat()
+    except FileNotFoundError:
+        return None
+    return (stat_result.st_dev, stat_result.st_ino, stat_result.st_size, stat_result.st_mtime_ns)
+
+
 def store(envelope: dict) -> dict:
+    global LEDGER_CACHE_PATH, LEDGER_SIGNATURE, LEDGER_LAST_HASH, LEDGER_MESSAGE_IDS
     STATE.parent.mkdir(parents=True, exist_ok=True)
     with LOCK:
-        previous, seen_ids = ledger_state()
+        path_key = str(STATE.resolve())
+        signature = ledger_signature()
+        # Verify once on startup and whenever another process changes the ledger.
+        # Normal appends then use the in-memory index instead of rescanning every record.
+        if LEDGER_CACHE_PATH != path_key or signature != LEDGER_SIGNATURE:
+            LEDGER_LAST_HASH, LEDGER_MESSAGE_IDS = ledger_state()
+            LEDGER_CACHE_PATH = path_key
+            LEDGER_SIGNATURE = ledger_signature()
         message_id = envelope.get("message_id")
-        if isinstance(message_id, str) and message_id in seen_ids:
+        if isinstance(message_id, str) and message_id in LEDGER_MESSAGE_IDS:
             raise ValueError("duplicate_message_id")
         record = {
             "received_at": now(),
-            "previous_observation_hash": previous,
+            "previous_observation_hash": LEDGER_LAST_HASH,
             "hash_profile": "RFC8785_JCS_SHA256",
             "envelope": envelope,
         }
         record["observation_hash"] = hashlib.sha256(canonical(record)).hexdigest()
-        with STATE.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n")
-        # Evidence may contain sensitive sensor metadata; protect the ledger even
-        # when the relay is launched manually rather than by the hardened unit.
-        os.chmod(STATE, 0o600)
+        try:
+            with STATE.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+            # Private by default, including a manually launched relay.
+            os.chmod(STATE, 0o600)
+        except OSError:
+            # A partial append must be inspected on the next attempt, not bypassed.
+            LEDGER_CACHE_PATH = None
+            LEDGER_SIGNATURE = None
+            raise ValueError("ledger_write_failed") from None
+        LEDGER_LAST_HASH = record["observation_hash"]
+        if isinstance(message_id, str) and message_id:
+            LEDGER_MESSAGE_IDS.add(message_id)
+        LEDGER_SIGNATURE = ledger_signature()
     return {
         "stored": True,
         "observation_hash": record["observation_hash"],
