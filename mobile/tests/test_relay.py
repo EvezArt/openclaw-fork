@@ -132,8 +132,19 @@ def test_hash_chain_and_digest() -> None:
             assert str(exc) == "duplicate_message_id"
         else:
             raise AssertionError("duplicate message ID must be rejected")
+
+        # External ledger edits change the cached file signature and must fail closed.
+        rows[0]["envelope"]["payload"]["sequence"] = 999
+        relay.STATE.write_text("\n".join(json.dumps(row, sort_keys=True) for row in rows) + "\n")
+        try:
+            relay.store({"message_id": "after-tamper"})
+        except ValueError as exc:
+            assert str(exc) == "ledger_hash_mismatch"
+        else:
+            raise AssertionError("tampered ledger must be rejected")
         print("mobile-relay-chain: PASS")
         print("mobile-relay-canonical-digest: PASS")
+        print("mobile-relay-tamper-detection: PASS")
 
 
 if __name__ == "__main__":
