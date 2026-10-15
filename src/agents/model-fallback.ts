@@ -19,6 +19,7 @@ import {
   isProfileInCooldown,
   resolveAuthProfileOrder,
 } from "./auth-profiles.js";
+import { assertOpenRouterRequestAllowed, OpenRouterBudgetError } from "./openrouter-guard.js";
 
 type ModelCandidate = {
   provider: string;
@@ -275,6 +276,9 @@ export async function runWithModelFallback<T>(params: {
       }
     }
     try {
+      if (candidate.provider === "openrouter") {
+        assertOpenRouterRequestAllowed({ cfg: params.cfg, model: candidate.model });
+      }
       const result = await params.run(candidate.provider, candidate.model);
       return {
         result,
@@ -285,6 +289,15 @@ export async function runWithModelFallback<T>(params: {
     } catch (err) {
       if (shouldRethrowAbort(err)) {
         throw err;
+      }
+      if (err instanceof OpenRouterBudgetError) {
+        attempts.push({
+          provider: candidate.provider,
+          model: candidate.model,
+          error: err.message,
+          reason: "billing",
+        });
+        continue;
       }
       const normalized =
         coerceToFailoverError(err, {
